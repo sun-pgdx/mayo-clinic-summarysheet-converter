@@ -15,6 +15,7 @@ use PGDX::Mayo::SummarySheet::Source::File::CSV::Parser;
 use PGDX::Mayo::SummarySheet::Source::File::CSV::Validator;
 use PGDX::Mayo::SummarySheet::Target::File::CSV::Writer;
 use PGDX::Mayo::SummarySheet::Target::Record;
+use PGDX::Mayo::AdapterSequences::File::Tab::Parser;
 
 # extends 'PGDX::SummarySheet::Converter';
 
@@ -130,9 +131,13 @@ sub run {
 
     $self->_parse_source_file();
 
+    $self->_load_adapters_lookup();
+
     $self->_run_conversion();
 
     $self->_write_target_file();
+
+    $self->_write_smartsheet_records();
 
     $self->_write_report();
 }
@@ -189,35 +194,126 @@ sub _run_conversion {
 
         $self->{_source_record_ctr}++;        
 
-        my $target_record = new PGDX::Mayo::SummarySheet::Target::Record();
-        if (!defined($target_record)){
-            $self->{_logger}->logconfess("Could not instantiate PGDX::Mayo::SummarySheet::Target::Record");
+        my $index = $source_record->getIndex();
+        if (!defined($index)){
+            $self->{_logger}->logconfess("index was not defined for record : ". Dumper $source_record);
         }
 
-        $target_record->setFCID($source_record->getFCID());
+        if (!exists $self->{_adapter_lookup}->{$index}){
+            
+            $self->{_logger}->fatal("adapter lookup : " . Dumper $self->{_adapter_lookup});
+            
+            $self->{_logger}->logconfess("'$index' does not exist in the adapter lookup");
+        }
 
-        $target_record->setLane($source_record->getLane());
+        my $adapter_record = $self->{_adapter_lookup}->{$index};
 
-        $target_record->setSampleId($source_record->getSampleId());
+        my $sequence_list = $adapter_record->getSequenceList();
 
-        $target_record->setSampleRef($source_record->getSampleRef());
+        if (!defined($sequence_list)){
+            $self->{_logger}->logconfess("sequence_list was not defined");
+        }
 
-        $target_record->setIndex($source_record->getIndex());
+        my $sample_id = $self->_get_next_sample_id();
 
-        $target_record->setDescriptor($source_record->getDescriptor());
+        my $sequence_ctr = 0;
 
-        $target_record->setControl($source_record->getY());
+        foreach my $sequence (@{$sequence_list}){
 
-        $target_record->setRecipe($source_record->getRecipe());
+            $sequence_ctr++;
 
-        $target_record->setOperator($source_record->getOperator());
+            my $id = $sample_id . $sequence_ctr . 'i'; 
 
-        $target_record->setSampleProject($source_record->getSampleProject());
+            my $target_record = new PGDX::Mayo::SummarySheet::Target::Record();
+            if (!defined($target_record)){
+                $self->{_logger}->logconfess("Could not instantiate PGDX::Mayo::SummarySheet::Target::Record");
+            }
 
-        push(@{$self->{_target_record_list}}, $target_record);
+            $target_record->setFCID($source_record->getFCID());
+
+            $target_record->setLane($source_record->getLane());
+
+            $target_record->setSampleId($id);
+
+            $target_record->setSampleRef($source_record->getSampleRef());
+
+            $target_record->setIndex($sequence);
+
+            my $descriptor = $source_record->getDescriptor();
+            
+            if ($descriptor =~ m/UID=/){
+                $descriptor =~ s/UID=//;
+            }
+            else {
+                $self->{_logger}->logconfess("Found descriptor '$descriptor' for record : " . Dumper $source_record);
+            }
+
+            $self->_store_descriptor($descriptor);
+
+            $target_record->setDescriptor($descriptor);
+
+            $target_record->setControl($source_record->getY());
+
+            $target_record->setRecipe($source_record->getRecipe());
+
+            $target_record->setOperator($source_record->getOperator());
+
+            $target_record->setSampleProject($source_record->getSampleProject());
+
+            push(@{$self->{_target_record_list}}, $target_record);
+        }
     }
 
     $self->{_logger}->info("Processed '$self->{_source_record_ctr}' records");
+}
+
+sub _get_next_sample_id {
+
+    my $self = shift;
+
+    if (!exists $self->{_next_id}){
+
+        my $next_pgdx_id = $self->getNextPGDXId();
+        if (!defined($next_pgdx_id)){
+            $self->{_logger}->logconfess("next_pgdx_id was not defined");
+        }
+
+        if ($next_pgdx_id =~ m/MAYO(\d{4})P$/){
+        
+            my $num = $1;
+        
+            $self->{_next_id} = $num;
+        }
+        else {
+            $self->{_logger}->logconfess("Could not parse '$next_pgdx_id'");
+        }
+    }
+
+    # my $sample_id = 'MAYO' . $self->{_next_id}++ . 'P_PS_Seq2_' . $sequence_number . 'i';
+    my $sample_id = 'MAYO' . $self->{_next_id}++ . 'P';
+    
+    $self->{_current_sample_id} = $sample_id;
+
+    $sample_id .= '_PS_Seq2_';
+
+    return $sample_id;
+}
+
+sub _store_descriptor {
+
+    my $self = shift;
+    my ($descriptor) = @_;
+
+    if (! exists $self->{_descriptor_lookup}->{$descriptor}){
+     
+        my $batch_number = $self->getBatchNumber();
+     
+        my $sample_id = $self->{_current_sample_id};
+     
+        push(@{$self->{_smartsheet_record_list}}, [$self->{_current_sample_id}, $descriptor, $batch_number]);
+     
+        $self->{_descriptor_lookup}->{$descriptor}++;
+    }
 }
 
 sub _write_target_file {
@@ -270,6 +366,51 @@ sub _getOutfile {
     }
 
     return $outfile;
+}
+
+sub _load_adapters_lookup {
+
+    my $self = shift;
+    
+    my $file = $self->{_config_manager}->getAdapterSequencesFile();
+    if (!defined($file)){
+        $self->{_logger}->logconfess("file was not defined");
+    }
+
+    my $parser = PGDX::Mayo::AdapterSequences::File::Tab::Parser::getInstance(infile => $file);
+    if (!defined($parser)){
+        $self->{_logger}->logconfess("Could not instantiate PGDX::Mayo::AdapterSequences::File::Tab::Parser");
+    }
+
+    my $lookup = $parser->getAdapterLookup();
+    if (!defined($lookup)){
+        $self->{_logger}->logconfess("lookup was not defined");
+    }
+
+    $self->{_adapter_lookup} = $lookup;
+
+    $self->{_logger}->info("adapter lookup loaded from adapter file '$file'");
+}
+
+sub _write_smartsheet_records {
+
+    my $self = shift;
+    my $outfile = $self->getOutdir() . '/smartsheet.txt';
+    
+    open (OUTFILE, ">$outfile") || $self->{_logger}->logconfess("Could not open '$outfile' in write mode : $!");
+    
+    print OUTFILE "PGDXID\tAlternate ID\tBatch\n";
+
+    foreach my $list (@{$self->{_smartsheet_record_list}}){
+
+        print OUTFILE join("\t", @{$list}) . "\n";
+    }
+
+    close OUTFILE;
+    
+    $self->{_logger}->info("Wrote smartsheet records to '$outfile'");
+    
+    print ("Wrote smartsheet records to '$outfile'\n");    
 }
 
 sub printBoldRed {

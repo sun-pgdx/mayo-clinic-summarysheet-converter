@@ -66,8 +66,6 @@ sub writeRecords_with_text_csv {
 
         $self->{_record_ctr}++;
 
-        print "SampleRef: '" . $record->getSampleRef() . "'\n";
-
         my $row = [
             $record->getFCID(),
             $record->getLane(),
@@ -116,9 +114,6 @@ sub writeRecords {
     foreach my $record (@{$record_list}){
 
         $self->{_record_ctr}++;
-
-        print "SampleRef: '" . $record->getSampleRef() . "'\n";
-        print "SampleProject: '" . $record->getSampleProject() . "'\n";
 
         my $row = [
             $record->getFCID(),

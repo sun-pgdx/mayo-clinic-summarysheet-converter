@@ -90,6 +90,13 @@ sub getTargetFileEOL {
     return $self->_getValue('target_file', 'end_of_line');
 }
 
+sub getAdapterSequencesFile {
+
+    my $self = shift;
+ 
+    return $self->_getValue('adapter_sequences', 'file');
+}
+
 sub _isParsed {
 
     my $self = shift;
