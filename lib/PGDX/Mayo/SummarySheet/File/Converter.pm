@@ -17,6 +17,7 @@ use PGDX::Mayo::SummarySheet::Target::File::CSV::Writer;
 use PGDX::Mayo::SummarySheet::Target::Record;
 use PGDX::Mayo::AdapterSequences::File::Tab::Parser;
 use PGDX::Smartsheet::File::Tab::Writer;
+use PGDX::Mayo::SampleManifest::File::Tab::Writer;
 
 # extends 'PGDX::SummarySheet::Converter';
 
@@ -140,6 +141,8 @@ sub run {
 
     $self->_write_smartsheet_records();
 
+    $self->_write_mayo_sample_manifest_records();
+
     $self->_write_report();
 }
 
@@ -249,7 +252,7 @@ sub _run_conversion {
                 $self->{_logger}->logconfess("Found descriptor '$descriptor' for record : " . Dumper $source_record);
             }
 
-            $self->_store_descriptor($descriptor);
+            $self->_store_descriptor($descriptor, $source_record->getSampleId());
 
             $target_record->setDescriptor($descriptor);
 
@@ -297,13 +300,24 @@ sub _get_next_sample_id {
 
     $sample_id .= '_PS_Seq2_';
 
+    ##
+    ## This is for writing the Mayo Sample Manifest file
+    ##
+    my $sample_name = $sample_id;
+    
+    $sample_name =~ s/_$//;
+    
+    $self->{_current_pgdx_sample_name} = $sample_name;
+
+
+
     return $sample_id;
 }
 
 sub _store_descriptor {
 
     my $self = shift;
-    my ($descriptor) = @_;
+    my ($descriptor, $mayo_sample_id) = @_;
 
     if (! exists $self->{_descriptor_lookup}->{$descriptor}){
      
@@ -312,6 +326,8 @@ sub _store_descriptor {
         my $sample_id = $self->{_current_sample_id};
      
         push(@{$self->{_smartsheet_record_list}}, [$self->{_current_sample_id}, $descriptor, $batch_number]);
+
+        push(@{$self->{_mayo_sample_manifest_record_list}}, [$descriptor, $mayo_sample_id, $self->{_current_pgdx_sample_name}]);
      
         $self->{_descriptor_lookup}->{$descriptor}++;
     }
@@ -405,6 +421,24 @@ sub _write_smartsheet_records {
 
     if (!defined($writer)){
         $self->{_logger}->logconfess("Could not instantiate PGDX::Smartsheet::File::Tab::Writer");
+    }
+
+    $writer->writeFile();
+}
+
+sub _write_mayo_sample_manifest_records {
+
+    my $self = shift;
+    
+    my $outfile = $self->getOutdir() . '/mayo_sample_manifest.txt';
+    
+    my $writer = new PGDX::Mayo::SampleManifest::File::Tab::Writer(
+        outfile     => $outfile,
+        record_list => $self->{_mayo_sample_manifest_record_list}
+        );
+
+    if (!defined($writer)){
+        $self->{_logger}->logconfess("Could not instantiate PGDX::Mayo::SampleManifest::File::Tab::Writer");
     }
 
     $writer->writeFile();
