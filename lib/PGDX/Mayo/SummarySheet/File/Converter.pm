@@ -257,7 +257,7 @@ sub _run_conversion {
 
             $target_record->setRecipe($source_record->getRecipe());
 
-            $target_record->setOperator($source_record->getOperator());
+            $target_record->setOperator($source_record->getSampleId());
 
             $target_record->setSampleProject($source_record->getSampleProject());
 
