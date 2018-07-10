@@ -16,6 +16,7 @@ use PGDX::Mayo::SummarySheet::Source::File::CSV::Validator;
 use PGDX::Mayo::SummarySheet::Target::File::CSV::Writer;
 use PGDX::Mayo::SummarySheet::Target::Record;
 use PGDX::Mayo::AdapterSequences::File::Tab::Parser;
+use PGDX::Smartsheet::File::Tab::Writer;
 
 # extends 'PGDX::SummarySheet::Converter';
 
@@ -397,20 +398,16 @@ sub _write_smartsheet_records {
     my $self = shift;
     my $outfile = $self->getOutdir() . '/smartsheet.txt';
     
-    open (OUTFILE, ">$outfile") || $self->{_logger}->logconfess("Could not open '$outfile' in write mode : $!");
-    
-    print OUTFILE "PGDXID\tAlternate ID\tBatch\n";
+    my $writer = new PGDX::Smartsheet::File::Tab::Writer(
+        outfile => $outfile,
+        record_list => $self->{_smartsheet_record_list}
+        );
 
-    foreach my $list (@{$self->{_smartsheet_record_list}}){
-
-        print OUTFILE join("\t", @{$list}) . "\n";
+    if (!defined($writer)){
+        $self->{_logger}->logconfess("Could not instantiate PGDX::Smartsheet::File::Tab::Writer");
     }
 
-    close OUTFILE;
-    
-    $self->{_logger}->info("Wrote smartsheet records to '$outfile'");
-    
-    print ("Wrote smartsheet records to '$outfile'\n");    
+    $writer->writeFile();
 }
 
 sub printBoldRed {
