@@ -115,7 +115,7 @@ sub _initLogger {
 sub _initConfigManager {
 
     my $self = shift;
-    
+
     my $config_manager = PGDX::Config::Manager::getInstance();
     if (!defined($config_manager)){
         $self->{_logger}->logconfess("Could not instantiate PGDX::Config::Manager");
@@ -127,7 +127,7 @@ sub _initConfigManager {
 sub run {
 
     my $self = shift;
-    
+
 
     $self->_validate_source_file();
 
@@ -149,7 +149,7 @@ sub run {
 sub _validate_source_file {
 
     my $self = shift;
-    
+
     my $infile = $self->getInfile();
 
     my $validator = new PGDX::Mayo::SummarySheet::Source::File::CSV::Validator(infile => $infile);
@@ -163,14 +163,14 @@ sub _validate_source_file {
     }
     else {
         printBoldRed("Mayo source summarysheet file '$infile' is NOT valid");
-        $self->{_logger}->logconfess("Mayo source summarysheet file '$infile' is NOT valid");        
+        $self->{_logger}->logconfess("Mayo source summarysheet file '$infile' is NOT valid");
     }
 }
 
 sub _parse_source_file {
 
     my $self = shift;
-    
+
     my $infile = $self->getInfile();
 
     my $parser = PGDX::Mayo::SummarySheet::Source::File::CSV::Parser::getInstance(infile => $infile);
@@ -196,7 +196,7 @@ sub _run_conversion {
 
     foreach my $source_record (@{$self->{_source_record_list}}){
 
-        $self->{_source_record_ctr}++;        
+        $self->{_source_record_ctr}++;
 
         my $index = $source_record->getIndex();
         if (!defined($index)){
@@ -204,9 +204,9 @@ sub _run_conversion {
         }
 
         if (!exists $self->{_adapter_lookup}->{$index}){
-            
+
             $self->{_logger}->fatal("adapter lookup : " . Dumper $self->{_adapter_lookup});
-            
+
             $self->{_logger}->logconfess("'$index' does not exist in the adapter lookup");
         }
 
@@ -226,7 +226,7 @@ sub _run_conversion {
 
             $sequence_ctr++;
 
-            my $id = $sample_id . $sequence_ctr . 'i'; 
+            my $id = $sample_id . $sequence_ctr . 'i';
 
             my $target_record = new PGDX::Mayo::SummarySheet::Target::Record();
             if (!defined($target_record)){
@@ -244,7 +244,7 @@ sub _run_conversion {
             $target_record->setIndex($sequence);
 
             my $descriptor = $source_record->getDescriptor();
-            
+
             if ($descriptor =~ m/UID=/){
                 $descriptor =~ s/UID=//;
             }
@@ -283,9 +283,9 @@ sub _get_next_sample_id {
         }
 
         if ($next_pgdx_id =~ m/MAYO(\d{4})P$/){
-        
+
             my $num = $1;
-        
+
             $self->{_next_id} = $num;
         }
         else {
@@ -295,7 +295,7 @@ sub _get_next_sample_id {
 
     # my $sample_id = 'MAYO' . $self->{_next_id}++ . 'P_PS_Seq2_' . $sequence_number . 'i';
     my $sample_id = 'MAYO' . $self->{_next_id}++ . 'P';
-    
+
     $self->{_current_sample_id} = $sample_id;
 
     $sample_id .= '_PS_Seq2_';
@@ -304,9 +304,9 @@ sub _get_next_sample_id {
     ## This is for writing the Mayo Sample Manifest file
     ##
     my $sample_name = $sample_id;
-    
+
     $sample_name =~ s/_$//;
-    
+
     $self->{_current_pgdx_sample_name} = $sample_name;
 
 
@@ -320,15 +320,15 @@ sub _store_descriptor {
     my ($descriptor, $mayo_sample_id) = @_;
 
     if (! exists $self->{_descriptor_lookup}->{$descriptor}){
-     
+
         my $batch_number = $self->getBatchNumber();
-     
+
         my $sample_id = $self->{_current_sample_id};
-     
+
         push(@{$self->{_smartsheet_record_list}}, [$self->{_current_sample_id}, $descriptor, $batch_number]);
 
         push(@{$self->{_mayo_sample_manifest_record_list}}, [$descriptor, $mayo_sample_id, $self->{_current_pgdx_sample_name}]);
-     
+
         $self->{_descriptor_lookup}->{$descriptor}++;
     }
 }
@@ -350,14 +350,14 @@ sub _write_target_file {
 sub _write_report {
 
     my $self = shift;
-    
+
     $self->{_logger}->warn("NOT YET IMPLEMENTED");
 }
 
 sub _getOutfile {
 
     my $self = shift;
-    
+
     my $outfile = $self->getOutfile();
 
     if (!defined($outfile)){
@@ -367,7 +367,7 @@ sub _getOutfile {
         if (!defined($outdir)){
 
             mkpath($outdir) || $self->{_logger}->logconfess("Could not create directory '$outdir' : $!");
-            
+
             $self->{_logger}->info("Created output directory '$outdir'");
         }
 
@@ -378,7 +378,7 @@ sub _getOutfile {
         }
 
         $outfile = $outdir . '/new_summarysheet.' . $ext;
-        
+
         $self->setOutfile($outfile);
     }
 
@@ -388,7 +388,7 @@ sub _getOutfile {
 sub _load_adapters_lookup {
 
     my $self = shift;
-    
+
     my $file = $self->{_config_manager}->getAdapterSequencesFile();
     if (!defined($file)){
         $self->{_logger}->logconfess("file was not defined");
@@ -413,7 +413,7 @@ sub _write_smartsheet_records {
 
     my $self = shift;
     my $outfile = $self->getOutdir() . '/smartsheet.txt';
-    
+
     my $writer = new PGDX::Smartsheet::File::Tab::Writer(
         outfile => $outfile,
         record_list => $self->{_smartsheet_record_list}
@@ -429,9 +429,9 @@ sub _write_smartsheet_records {
 sub _write_mayo_sample_manifest_records {
 
     my $self = shift;
-    
+
     my $outfile = $self->getOutdir() . '/mayo_sample_manifest.txt';
-    
+
     my $writer = new PGDX::Mayo::SampleManifest::File::Tab::Writer(
         outfile     => $outfile,
         record_list => $self->{_mayo_sample_manifest_record_list}
@@ -487,7 +487,7 @@ __END__
 =head1 NAME
 
  PGDX::Mayo::SummarySheet::File::Converter
- 
+
 =head1 VERSION
 
  1.0
